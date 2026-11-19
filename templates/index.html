@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sınavgram Admin | Yönetim Paneli</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Zengin Metin Editörü CSS -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f0f2f5; }
+        .navbar { background: #673AB7; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .main-container { max-width: 1300px; margin-top: 30px; }
+        .card { border: none; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); }
+        
+        /* Resim Önizleme Stilleri */
+        .q-img-wrapper { position: relative; width: 60px; height: 60px; cursor: pointer; }
+        .table-img { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; transition: transform 0.2s; }
+        .table-img:hover { transform: scale(1.1); }
+        
+        /* Modal Form Düzeni */
+        .edit-form-container { background: #fff; padding: 25px; border-radius: 15px; border: 1px solid #dee2e6; }
+        
+        /* Arama ve Navigasyon */
+        .search-wrapper { position: relative; }
+        .search-wrapper i { position: absolute; left: 15px; top: 12px; color: #673AB7; }
+        .search-box { border-radius: 10px; padding-left: 40px; }
+        
+        .pagination .page-link { color: #673AB7; border-radius: 6px; margin: 0 2px; border: none; font-weight: 600; }
+        .pagination .page-item.active .page-link { background-color: #673AB7; color: white; }
+        
+        .btn-status { width: 38px; height: 38px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; }
+
+        /* Email Modülü Stilleri */
+        .mail-sidebar { background: #fdfdfe; border-right: 1px solid #dee2e6; height: 650px; display: flex; flex-direction: column; }
+        .mail-list { flex: 1; overflow-y: auto; }
+        .mail-item { display: block; padding: 15px; border-bottom: 1px solid #f0f2f5; text-decoration: none; color: #333; transition: background 0.2s; }
+        .mail-item:hover { background-color: #f8f9fa; }
+        .mail-item.active { background-color: #f0f2f5; border-left: 4px solid #673AB7; }
+        .mail-subject { font-weight: bold; font-size: 14px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mail-sender { font-size: 13px; color: #666; margin-bottom: 2px; }
+        .mail-date { font-size: 11px; color: #aaa; }
+        .mail-content-area { height: 650px; overflow-y: auto; padding: 20px; background: #fff; }
+        #editor-container { height: 200px; font-family: 'Inter', sans-serif; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark py-2">
+    <div class="container d-flex justify-content-between align-items-center">
+        <a class="navbar-brand fw-bold" href="/"><i class="fas fa-check-double me-2"></i>Sınavgram Admin</a>
+        <button type="button" class="btn btn-warning btn-sm fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#seasonModal">
+            <i class="fas fa-archive me-2"></i>Sezonu Arşivle & Sıfırla
+        </button>
+    </div>
+</nav>
+
+<div class="container mt-3">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+</div>
+
+<div class="container main-container pb-5">
+    
+    <div class="card p-3 mb-4">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-9">
+                <div class="nav nav-pills">
+                    <a class="nav-link {% if active_tab == 'pending' %}active{% endif %}" href="/?tab=pending&page=1">
+                        <i class="fas fa-clock me-1"></i> Bekleyenler <span class="badge bg-white text-dark ms-1">{{ counts.pending }}</span>
+                    </a>
+                    <a class="nav-link {% if active_tab == 'reported' %}active{% endif %}" href="/?tab=reported&page=1">
+                        <i class="fas fa-exclamation-circle me-1"></i> Raporlananlar <span class="badge bg-white text-dark ms-1">{{ counts.reported }}</span>
+                    </a>
+                    <a class="nav-link {% if active_tab == 'approved' %}active{% endif %}" href="/?tab=approved&page=1">
+                        <i class="fas fa-check-circle me-1"></i> Onaylılar <span class="badge bg-white text-dark ms-1">{{ counts.approved }}</span>
+                    </a>
+                    <a class="nav-link {% if active_tab == 'newsletter' %}active{% endif %}" href="/?tab=newsletter">
+                        <i class="fas fa-paper-plane me-1"></i> Bülten Gönder
+                    </a>
+                    <a class="nav-link {% if active_tab == 'email' %}active{% endif %}" href="/?tab=email&folder=inbox">
+                        <i class="fas fa-envelope me-1"></i> E-Posta
+                    </a>
+                </div>
+            </div>
+            {% if active_tab in ['pending', 'reported', 'approved'] %}
+            <div class="col-md-3">
+                <div class="search-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="mainSearch" class="form-control search-box" placeholder="Soru veya ders ara...">
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- SORU YÖNETİMİ ALANI -->
+    {% if active_tab in ['pending', 'reported', 'approved'] %}
+    <div class="card shadow-sm mb-4">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="mainTable">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Resim</th>
+                        <th>Kategori</th>
+                        <th style="width: 40%;">Soru İçeriği</th>
+                        {% if active_tab == 'reported' %}
+                        <th style="color: #d9534f; width: 15%;">Rapor Sebebi</th>
+                        <th>Rapor Tarihi</th>
+                        {% endif %}
+                        <th class="text-end pe-4">İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set active_list = {'pending': pending, 'reported': reported, 'approved': approved}[active_tab] %}
+                    {% for q in active_list %}
+                    <tr class="q-row">
+                        <td class="ps-4">
+                            {% if q.image_url %}
+                                <div class="q-img-wrapper" data-bs-toggle="modal" data-bs-target="#imgModal{{q.id}}">
+                                    <img src="{{ q.image_url }}" class="table-img border shadow-sm">
+                                </div>
+                            {% else %}
+                                <div class="table-img bg-light border d-flex align-items-center justify-content-center text-muted small">Yok</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-primary border mb-1">{{ q.display_course }}</span><br>
+                            <small class="text-muted">{{ q.display_subtopic }}</small>
+                        </td>
+                        <td class="q-text text-muted small">{{ q.text }}</td>
+
+                        {% if active_tab == 'reported' %}
+                        <td>
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                                <i class="fas fa-exclamation-triangle me-1"></i>{{ q.report_reason }}
+                            </span>
+                        </td>
+                        <td><small class="fw-bold text-secondary">{{ q.report_date }}</small></td>
+                        {% endif %}
+                        <td class="text-end pe-4">
+                            <div class="btn-group shadow-sm">
+                                {% if active_tab != 'approved' %}
+                                    <a href="/set_status/{{ q.id }}/approved?tab={{ active_tab }}" 
+                                    class="btn btn-white border text-success btn-status" 
+                                    onclick="this.closest('tr').style.opacity='0.3'; this.style.pointerEvents='none';" title="Onayla">
+                                        <i class="fas fa-check"></i>
+                                    </a>
+                                {% endif %}
+                                <button class="btn btn-white border text-primary btn-status" data-bs-toggle="modal" data-bs-target="#editModal{{q.id}}" title="Düzenle">
+                                    <i class="fas fa-pen"></i>
+                                </button>
+                                <a href="/delete/{{ q.id }}" class="btn btn-white border text-danger btn-status" onclick="return confirm('Silinsin mi?')" title="Sil">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- BÜLTEN ALANI -->
+    {% if active_tab == 'newsletter' %}
+    <div class="card shadow-sm p-4">
+        <h5 class="fw-bold mb-4 text-primary"><i class="fas fa-envelope-open-text me-2"></i>Yeni Bülten Oluştur</h5>
+        <form action="/send_newsletter" method="POST">
+            <div class="mb-3">
+                <label class="form-label fw-bold">E-posta Konusu</label>
+                <input type="text" name="subject" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold">HTML İçerik</label>
+                <textarea name="html_content" class="form-control" rows="12" required></textarea>
+            </div>
+            <div class="text-end">
+                <button type="submit" formaction="/test_newsletter" class="btn btn-outline-primary px-4 fw-bold shadow-sm me-2">
+                    <i class="fas fa-vial me-2"></i>Test Gönder
+                </button>
+                <button type="submit" class="btn btn-primary px-5 fw-bold shadow">
+                    <i class="fas fa-share-square me-2"></i>Tümüne Gönder
+                </button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    <!-- E-POSTA ALANI -->
+    {% if active_tab == 'email' %}
+    <div class="card shadow-sm overflow-hidden">
+        <div class="row g-0">
+            
+            <!-- Sol Menü ve Mail Listesi -->
+            <div class="col-md-4 mail-sidebar border-end">
+                <div class="p-3 bg-light border-bottom d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold"><i class="fas fa-inbox me-2"></i>Posta Kutusu</h6>
+                    <a href="/?tab=email&folder={{ current_folder }}" class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> Yeni</a>
+                </div>
+                
+                <div class="btn-group w-100 rounded-0" role="group">
+                    <a href="/?tab=email&folder=inbox" class="btn btn-light rounded-0 {% if current_folder == 'inbox' %}active fw-bold border-bottom border-primary{% endif %}"><i class="fas fa-inbox"></i> Gelen</a>
+                    <a href="/?tab=email&folder=sent" class="btn btn-light rounded-0 {% if current_folder == 'sent' %}active fw-bold border-bottom border-primary{% endif %}"><i class="fas fa-paper-plane"></i> Gönderilen</a>
+                    <a href="/?tab=email&folder=spam" class="btn btn-light rounded-0 {% if current_folder == 'spam' %}active fw-bold border-bottom border-primary{% endif %}"><i class="fas fa-ban"></i> Spam</a>
+                </div>
+
+                <!-- YENİ: E-posta Arama Çubuğu -->
+                <div class="p-2 bg-light border-bottom">
+                    <form action="/" method="GET" class="d-flex">
+                        <input type="hidden" name="tab" value="email">
+                        <input type="hidden" name="folder" value="{{ current_folder }}">
+                        <input type="text" name="q" class="form-control form-control-sm me-2" placeholder="Mail ara (örn: fatura)" value="{{ search_query }}">
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search"></i></button>
+                    </form>
+                </div>
+
+                <div class="mail-list">
+                    {% if emails %}
+                        {% for mail in emails %}
+                        <a href="{{ url_for('index', tab='email', mail_id=mail.id, page=page, folder=current_folder, q=search_query) }}" class="mail-item {% if active_mail and active_mail.id == mail.id %}active{% endif %}">
+                            <div class="mail-subject">{{ mail.subject }}</div>
+                            <div class="mail-sender"><i class="fas fa-user-circle me-1"></i> {{ mail.from }}</div>
+                            <div class="mail-date"><i class="far fa-calendar-alt me-1"></i> {{ mail.date }}</div>
+                        </a>
+                        {% endfor %}
+                    {% else %}
+                        <div class="p-4 text-center text-muted"><i class="fas fa-folder-open mb-2 fa-2x"></i><br>Bu klasör boş veya sonuç bulunamadı.</div>
+                    {% endif %}
+                </div>
+
+                <!-- YENİ: Mail Listesinin İçine Taşınan Sayfalama -->
+                {% if total_pages > 1 %}
+                <div class="p-2 bg-white border-top">
+                    <ul class="pagination pagination-sm justify-content-center mb-0">
+                        <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                            <a class="page-link shadow-sm" href="/?tab=email&folder={{ current_folder }}&q={{ search_query }}&page=1"><i class="fas fa-angle-double-left"></i></a>
+                        </li>
+                        {% for p in range(1, total_pages + 1) %}
+                            {% if p >= page - 2 and p <= page + 2 %}
+                            <li class="page-item {% if page == p %}active{% endif %}">
+                                <a class="page-link shadow-sm" href="/?tab=email&folder={{ current_folder }}&q={{ search_query }}&page={{ p }}">{{ p }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                            <a class="page-link shadow-sm" href="/?tab=email&folder={{ current_folder }}&q={{ search_query }}&page={{ total_pages }}"><i class="fas fa-angle-double-right"></i></a>
+                        </li>
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Sağ İçerik Alanı -->
+            <div class="col-md-8 mail-content-area">
+                {% if active_mail %}
+                    <div class="mb-4">
+                        <h4 class="fw-bold">{{ active_mail.subject }}</h4>
+                        <div class="bg-light p-3 rounded mb-3 border">
+                            <div><i class="fas fa-user me-2"></i> <strong>Kimden:</strong> {{ active_mail.from }}</div>
+                            <div class="mt-1"><i class="fas fa-bullseye me-2"></i> <strong>Kime:</strong> {{ active_mail.to }}</div>
+                            <div class="mt-1 text-muted"><i class="far fa-clock me-2"></i> {{ active_mail.date }}</div>
+                        </div>
+                        <div class="border p-3 rounded mb-4 shadow-sm bg-white" style="overflow-x:auto;">
+                            {{ active_mail.body | safe }}
+                        </div>
+                    </div>
+                    
+                    <h5 class="fw-bold"><i class="fas fa-reply me-2"></i>Yanıtla</h5>
+                    <form method="POST" action="/send_email" enctype="multipart/form-data" id="mailForm">
+                        <input type="hidden" name="current_folder" value="{{ current_folder }}">
+                        <input type="hidden" name="html_content" id="html_content">
+                        
+                        <div class="mb-3">
+                            <label class="fw-bold mb-1"><i class="fas fa-at me-1"></i> Alıcı</label>
+                            <input type="email" name="to_email" class="form-control" value="{{ active_mail.reply_to }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="fw-bold mb-1"><i class="fas fa-thumbtack me-1"></i> Konu</label>
+                            <input type="text" name="subject" class="form-control" value="{{ active_mail.reply_subject }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="fw-bold mb-1"><i class="fas fa-pen me-1"></i> Mesaj</label>
+                            <div id="editor-container"><br><br><blockquote>--- Orijinal Mesaj ---</blockquote></div>
+                        </div>
+                        <div class="mb-3 bg-light p-3 border rounded">
+                            <label class="fw-bold"><i class="fas fa-paperclip me-1"></i> Dosya Ekle</label>
+                            <input type="file" class="form-control form-control-sm mt-1" name="attachments" multiple>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-rocket me-2"></i> Yanıtı Gönder</button>
+                    </form>
+                {% else %}
+                    <div class="p-3">
+                        <h4 class="fw-bold mb-4"><i class="fas fa-edit me-2"></i>Yeni E-Posta</h4>
+                        <form method="POST" action="/send_email" enctype="multipart/form-data" id="mailForm">
+                            <input type="hidden" name="current_folder" value="{{ current_folder }}">
+                            <input type="hidden" name="html_content" id="html_content">
+                            
+                            <div class="mb-3">
+                                <label class="fw-bold mb-1"><i class="fas fa-at me-1"></i> Alıcı</label>
+                                <input type="email" name="to_email" class="form-control" placeholder="ornek@mail.com" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="fw-bold mb-1"><i class="fas fa-thumbtack me-1"></i> Konu</label>
+                                <input type="text" name="subject" class="form-control" placeholder="E-posta konusu..." required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="fw-bold mb-1"><i class="fas fa-pen me-1"></i> Mesajınız</label>
+                                <div id="editor-container"></div>
+                            </div>
+                            <div class="mb-3 bg-light p-3 border rounded">
+                                <label class="fw-bold"><i class="fas fa-paperclip me-1"></i> Dosya Ekle</label>
+                                <input type="file" class="form-control form-control-sm mt-1" name="attachments" multiple>
+                            </div>
+                            <button type="submit" class="btn btn-primary px-4"><i class="fas fa-rocket me-2"></i> Gönder</button>
+                        </form>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ORTAK SAYFALAMA (E-posta sekmesinde görünmez) -->
+    {% if active_tab != 'email' and total_pages > 1 %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                <a class="page-link shadow-sm" href="/?tab={{ active_tab }}&page=1"><i class="fas fa-angle-double-left"></i></a>
+            </li>
+            {% for p in range(1, total_pages + 1) %}
+                {% if p >= page - 3 and p <= page + 3 %}
+                <li class="page-item {% if page == p %}active{% endif %}">
+                    <a class="page-link shadow-sm" href="/?tab={{ active_tab }}&page={{ p }}">{{ p }}</a>
+                </li>
+                {% endif %}
+            {% endfor %}
+            <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                <a class="page-link shadow-sm" href="/?tab={{ active_tab }}&page={{ total_pages }}"><i class="fas fa-angle-double-right"></i></a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+
+</div>
+
+<!-- SORU GÜNCELLEME MODALLARI -->
+{% if active_tab in ['pending', 'reported', 'approved'] %}
+    {% for q in active_list %}
+        {% if q.image_url %}
+        <div class="modal fade" id="imgModal{{q.id}}" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content border-0 bg-transparent">
+                    <div class="modal-body p-0 text-center">
+                        <img src="{{ q.image_url }}" class="img-fluid rounded shadow-lg" style="max-height: 90vh;">
+                        <button type="button" class="btn btn-dark mt-3 px-4 shadow" data-bs-dismiss="modal">Kapat</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="modal fade" id="editModal{{q.id}}" data-bs-backdrop="static" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header border-0 bg-light">
+                        <h5 class="modal-title fw-bold text-dark">Soru Güncelleme Paneli</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="container edit-form-container shadow-sm">
+                            <form action="/update/{{q.id}}?tab={{ active_tab }}" method="POST">
+                                <div class="row g-3">
+                                    <div class="col-md-8">
+                                        <label class="form-label small fw-bold text-muted">Ders & Konu Bilgisi</label>
+                                        <div class="input-group mb-2 shadow-sm">
+                                            <span class="input-group-text bg-primary text-white fw-bold">Ders</span>
+                                            <select name="course_id" class="form-select course-select bg-light" data-qid="{{q.id}}" required>
+                                                <option value="">Ders Seçiniz...</option>
+                                                {% for c in courses_list %}
+                                                <option value="{{ c.id }}" {% if q.course_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="input-group shadow-sm">
+                                            <span class="input-group-text bg-primary text-white fw-bold">Konu</span>
+                                            <select name="subtopic_id" class="form-select subtopic-select bg-light" id="subtopic-select-{{q.id}}" data-initial="{{q.subtopic_id}}" required></select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold text-muted">Doğru Cevap</label>
+                                        <select name="correct_option" class="form-select border-primary fw-bold shadow-sm">
+                                            {% for opt in ['A', 'B', 'C', 'D', 'E'] %}
+                                            <option value="{{ opt }}" {% if q.get('correct_option') == opt %}selected{% endif %}>{{ opt }} Şıkkı</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small fw-bold text-muted">Soru Metni</label>
+                                        <textarea name="text" class="form-control" rows="4" required>{{ q.text }}</textarea>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small fw-bold text-muted">Resim URL</label>
+                                        <input type="text" name="image_url" class="form-control" value="{{ q.get('image_url', '') }}">
+                                    </div>
+                                    <div class="col-12 mt-4">
+                                        <h6 class="fw-bold text-primary border-bottom pb-2">Seçenekler</h6>
+                                        {% set opts = q.get('options', {}) %}
+                                        {% for key in ['A', 'B', 'C', 'D', 'E'] %}
+                                        <div class="input-group mb-2 shadow-sm">
+                                            <span class="input-group-text bg-primary text-white fw-bold">{{ key }}</span>
+                                            <input type="text" name="option_{{ key|lower }}" class="form-control" value="{{ opts.get(key, '') }}" required>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                <div class="mt-4 d-flex justify-content-end border-top pt-3">
+                                    <button type="button" class="btn btn-link text-muted me-3" data-bs-dismiss="modal">İptal</button>
+                                    <button type="submit" class="btn btn-primary px-5 fw-bold shadow-sm">Kaydet</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<div class="modal fade" id="seasonModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form action="/archive_season" method="POST">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title fw-bold text-dark"><i class="fas fa-archive me-2"></i>Sezon Sonu Arşivlemesi</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger shadow-sm">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>DİKKAT:</strong> Puanlar sıfırlanacak.
+                    </div>
+                    <div class="mb-3 mt-4">
+                        <label class="form-label fw-bold">Kapanan Sezonun Adı</label>
+                        <input type="text" name="season_name" class="form-control form-control-lg bg-light" required>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-danger px-4 fw-bold shadow-sm">Onayla ve Sıfırla</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Zengin Metin Editörü JS (Eğer E-posta sekmesi açıksa) -->
+{% if active_tab == 'email' %}
+<script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+<script>
+    if (document.getElementById('editor-container')) {
+        var quill = new Quill('#editor-container', {
+            theme: 'snow',
+            placeholder: 'Mesajınızı yazın...',
+            modules: { toolbar: [['bold', 'italic', 'underline'], [{'list': 'ordered'}, {'list': 'bullet'}], ['link', 'image'], ['clean']] }
+        });
+        document.getElementById('mailForm').onsubmit = function() {
+            document.querySelector('input[name=html_content]').value = quill.root.innerHTML;
+        };
+    }
+</script>
+{% endif %}
+
+<!-- Soru Düzenleme Scripti (Eğer soru sekmesi açıksa) -->
+{% if active_tab in ['pending', 'reported', 'approved'] %}
+<script>
+    const searchInput = document.getElementById('mainSearch');
+    if(searchInput) {
+        searchInput.addEventListener('input', function(e) {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('.q-row').forEach(row => {
+                const text = row.querySelector('.q-text').innerText.toLowerCase();
+                row.style.display = text.includes(term) ? "" : "none";
+            });
+        });
+    }
+
+    const coursesData = JSON.parse('{{ courses_list | tojson | safe }}');
+    document.querySelectorAll('.course-select').forEach(select => {
+        const qid = select.getAttribute('data-qid');
+        const subtopicSelect = document.getElementById('subtopic-select-' + qid);
+        const initialSubtopicId = subtopicSelect.getAttribute('data-initial');
+        
+        function updateSubtopics(selectedCourseId, selectedSubtopicId = null) {
+            subtopicSelect.innerHTML = '<option value="">Konu Seçiniz...</option>';
+            if (!selectedCourseId) return;
+            const course = coursesData.find(c => c.id === selectedCourseId);
+            if (course && course.subtopics) {
+                course.subtopics.forEach(sub => {
+                    const option = document.createElement('option');
+                    option.value = sub.id; option.textContent = sub.name;
+                    if (sub.id === selectedSubtopicId) option.selected = true;
+                    subtopicSelect.appendChild(option);
+                });
+            }
+        }
+        updateSubtopics(select.value, initialSubtopicId);
+        select.addEventListener('change', function() { updateSubtopics(this.value); });
+    });
+</script>
+{% endif %}
+
+</body>
+</html>
